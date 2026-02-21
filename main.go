@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 )
 
 const filePath = "messages.txt"
@@ -26,6 +27,8 @@ func main() {
 	fmt.Printf("Reading data from %s\n", filePath)
 	fmt.Println("=====================================")
 
+	currentLine := ""
+
 	for fileSize > 0 {
 		bufferSize := 8
 		buffer := make([]byte, bufferSize)
@@ -38,6 +41,19 @@ func main() {
 		}
 		fileSize -= int64(bufferSize)
 
-		fmt.Printf("read: %s\n", string(buffer[:count]))
+		str := string(buffer[:count])
+
+		parts := strings.Split(str, "\n")
+		for i, part := range parts {
+			if i < len(parts)-1 {
+				// Not the last part - complete line found
+				currentLine += part
+				fmt.Printf("read: %s\n", currentLine)
+				currentLine = ""
+			} else {
+				// Last part - might be incomplete, accumulate for next iteration
+				currentLine += part
+			}
+		}
 	}
 }
