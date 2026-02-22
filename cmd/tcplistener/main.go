@@ -49,11 +49,14 @@ func getLinesChannel(file io.ReadCloser) <-chan string {
 			bufferSize := 8
 			buffer := make([]byte, bufferSize)
 			count, err := file.Read(buffer)
-			if err != nil && err.Error() != "EOF" { // Check for actual errors, not just end-of-file
+			if err != nil {
+				if currentLine != "" {
+					lines <- currentLine
+				}
+				if err.Error() == "EOF" {
+					break
+				}
 				log.Fatal(err)
-			}
-			if err != nil && err.Error() == "EOF" {
-				break
 			}
 
 			str := string(buffer[:count])
