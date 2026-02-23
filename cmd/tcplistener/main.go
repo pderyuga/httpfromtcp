@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net"
-	"strings"
+
+	"github.com/pderyuga/httpfromtcp/internal/request"
 )
 
 const port = "42069"
@@ -26,56 +26,15 @@ func main() {
 
 		fmt.Println("Accepted connection from", conn.RemoteAddr())
 
-		channel := getLinesChannel(conn)
-
-		for line := range channel {
-			fmt.Println(line)
+		request, err := request.RequestFromReader(conn)
+		if err != nil {
+			log.Fatalf("error parsing request: %s\n", err.Error())
 		}
+		fmt.Println("Request line:")
+		fmt.Printf(" - Method: %s\n", request.RequestLine.Method)
+		fmt.Printf(" - Target: %s\n", request.RequestLine.RequestTarget)
+		fmt.Printf(" - Version: %s\n", request.RequestLine.HttpVersion)
 
 		fmt.Println("Connection to ", conn.RemoteAddr(), "closed")
 	}
-}
-
-func getLinesChannel(file io.ReadCloser) <-chan string {
-	lines := make(chan string)
-
-	go func() {
-		defer file.Close()
-		defer close(lines)
-
-		currentLine := ""
-
-		for {
-			bufferSize := 8
-			buffer := make([]byte, bufferSize)
-			count, err := file.Read(buffer)
-			if err != nil {
-				if currentLine != "" {
-					lines <- currentLine
-				}
-				if err.Error() == "EOF" {
-					break
-				}
-				log.Fatal(err)
-			}
-
-			str := string(buffer[:count])
-
-			parts := strings.Split(str, "\n")
-			for i, part := range parts {
-				if i < len(parts)-1 {
-					// last chunk before newline - add to current line, print  current line, and reset current line to empty string
-					currentLine += part
-					lines <- currentLine
-					currentLine = ""
-				} else {
-					// not the last chunk before the newline, add to current line
-					currentLine += part
-				}
-			}
-		}
-	}()
-
-	return lines
-
 }
