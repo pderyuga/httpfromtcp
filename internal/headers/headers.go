@@ -56,7 +56,12 @@ func (h Headers) Set(key, value string) {
 	} else {
 		h[key] = value
 	}
+}
 
+func (h Headers) Get(key string) (string, bool) {
+	key = strings.ToLower(key)
+	value, ok := h[key]
+	return value, ok
 }
 
 func isTchar(r rune) bool {

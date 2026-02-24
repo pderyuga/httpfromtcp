@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -16,12 +17,14 @@ type State int
 const (
 	requestStateInitialized State = iota
 	requestStateParsingHeaders
+	requestStateParsingBody
 	requestStateDone
 )
 
 type Request struct {
 	RequestLine RequestLine
 	Headers     headers.Headers
+	Body        []byte
 	state       State
 }
 
@@ -158,8 +161,30 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 			return 0, err
 		}
 		if parsingHeadersDone {
+			r.state = requestStateParsingBody
+		}
+		return numBytes, nil
+	case requestStateParsingBody:
+		numBytes := len(data)
+		contentLengthString, ok := r.Headers.Get("Content-Length")
+		if !ok {
+			r.state = requestStateDone
+			return numBytes, nil
+		}
+
+		contentLength, err := strconv.Atoi(contentLengthString)
+		if err != nil {
+			return 0, fmt.Errorf("Malformed Content-Length header: %s", err)
+		}
+
+		r.Body = append(r.Body, data...)
+		if len(r.Body) > contentLength {
+			return 0, fmt.Errorf("Request body is too large")
+		}
+		if len(r.Body) == contentLength {
 			r.state = requestStateDone
 		}
+
 		return numBytes, nil
 	case requestStateDone:
 		return 0, fmt.Errorf("error: trying to read data in a done state")
