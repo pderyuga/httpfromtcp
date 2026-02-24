@@ -44,13 +44,19 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		return 0, false, fmt.Errorf("Header contains only whitespaes")
 	}
 
-	h.Set(key, string(value))
+	h.Set(key, value)
 	return idx + 2, false, nil
 }
 
 func (h Headers) Set(key, value string) {
 	key = strings.ToLower(key)
-	h[key] = value
+	existingValue, ok := h[key]
+	if ok {
+		h[key] = existingValue + ", " + value
+	} else {
+		h[key] = value
+	}
+
 }
 
 func isTchar(r rune) bool {
