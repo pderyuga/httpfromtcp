@@ -27,17 +27,40 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		return 0, false, fmt.Errorf("Malformed header: %s\n", headerLineString)
 	}
 	key := parts[0]
+	if key != strings.TrimRight(key, " ") {
+		return 0, false, fmt.Errorf("invalid header name: %s", key)
+	}
+
+	key = strings.TrimSpace(key)
+
 	for _, char := range key {
-		if unicode.IsSpace(char) { // Checks if the rune is a whitespace character
-			return 0, false, fmt.Errorf("Invalid header key: %s\n", key)
+		if !isTchar(char) { // Checks if the rune is a whitespace character
+			return 0, false, fmt.Errorf("Invalid header name: %s\n", key)
 		}
 	}
 	value := parts[1]
-	headervalue := strings.TrimSpace(value)
-	if headervalue == "" {
-		return 0, false, fmt.Errorf("Key contains only whitespaes")
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false, fmt.Errorf("Header contains only whitespaes")
 	}
 
-	h[key] = headervalue
+	h.Set(key, string(value))
 	return idx + 2, false, nil
+}
+
+func (h Headers) Set(key, value string) {
+	key = strings.ToLower(key)
+	h[key] = value
+}
+
+func isTchar(r rune) bool {
+	if unicode.IsLetter(r) || unicode.IsNumber(r) {
+		return true
+	}
+	// Define the set of allowed symbols: !#$%&'*+-.^_`|~
+	switch r {
+	case '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '_', '`', '|', '~':
+		return true
+	}
+	return false
 }
