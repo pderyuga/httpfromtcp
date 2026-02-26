@@ -5,6 +5,8 @@ import (
 	"log"
 	"net"
 	"sync/atomic"
+
+	"github.com/pderyuga/httpfromtcp/internal/response"
 )
 
 type Server struct {
@@ -60,24 +62,20 @@ func (s *Server) handle(conn net.Conn) {
 
 	fmt.Println("Accepted connection from", conn.RemoteAddr())
 
-	responseMsg := "Hello World!\n"
-
-	response := fmt.Sprintf(
-		"HTTP/1.1 200 OK\r\n"+
-			"Content-Type: text/plain\r\n"+
-			"Content-Length: %d\r\n"+
-			"\r\n"+
-			"%s",
-		len(responseMsg),
-		responseMsg,
-	)
-
-	bytesSent, err := conn.Write([]byte(response))
+	err := response.WriteStatusLine(conn, response.StatusOK)
 	if err != nil {
-		fmt.Println("Error writing:", err.Error())
+		fmt.Println("Error writing status line:", err.Error())
 		return
 	}
-	fmt.Printf("Sent %d bytes as response\n", bytesSent)
+
+	defaultHeaders := response.GetDefaultHeaders(0)
+
+	err = response.WriteHeaders(conn, defaultHeaders)
+	if err != nil {
+		fmt.Println("Error writing headers:", err.Error())
+		return
+	}
+	fmt.Println("Response sent!")
 
 	fmt.Println("Connection to ", conn.RemoteAddr(), "closed")
 }
