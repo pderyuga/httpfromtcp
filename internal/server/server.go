@@ -1,9 +1,7 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"sync/atomic"
@@ -12,38 +10,7 @@ import (
 	"github.com/pderyuga/httpfromtcp/internal/response"
 )
 
-type Handler func(w io.Writer, req *request.Request) *HandlerError
-
-type HandlerError struct {
-	StatusCode response.StatusCode
-	Message    string
-}
-
-func (h HandlerError) Write(w io.Writer) error {
-	messageLength := len(h.Message)
-
-	err := response.WriteStatusLine(w, h.StatusCode)
-	if err != nil {
-		fmt.Println("Error writing status line:", err.Error())
-		return err
-	}
-
-	defaultHeaders := response.GetDefaultHeaders(messageLength)
-
-	err = response.WriteHeaders(w, defaultHeaders)
-	if err != nil {
-		fmt.Println("Error writing headers:", err.Error())
-		return err
-	}
-
-	_, err = w.Write([]byte(h.Message))
-	if err != nil {
-		fmt.Println("Error writing body:", err.Error())
-		return err
-	}
-
-	return nil
-}
+type Handler func(w *response.Writer, req *request.Request)
 
 type Server struct {
 	handler  Handler
@@ -100,53 +67,20 @@ func (s *Server) handle(conn net.Conn) {
 
 	fmt.Println("Accepted connection from", conn.RemoteAddr())
 
+	w := response.Writer{Writer: conn, WriterState: response.WritingStatusLine, BytesWritten: 0}
+
 	req, err := request.RequestFromReader(conn)
 	if err != nil {
-		handlerError := HandlerError{
-			StatusCode: response.StatusBadrequest,
-			Message:    err.Error(),
-		}
-		err = handlerError.Write(conn)
-		if err != nil {
-			fmt.Println("Error writing handler error:", err.Error())
-		}
+		w.WriteStatusLine(response.StatusBadrequest)
+		body := []byte(fmt.Sprintf("Error parsing request: %v", err))
+		w.WriteHeaders(response.GetDefaultHeaders(len(body)))
+		w.WriteBody(body)
 		return
 	}
 
-	buffer := bytes.NewBuffer([]byte{})
+	s.handler(&w, req)
 
-	handlerError := s.handler(buffer, req)
-	if handlerError != nil {
-		err := handlerError.Write(conn)
-		if err != nil {
-			fmt.Println("Error writing handler error:", err.Error())
-		}
-		return
-	}
-
-	err = response.WriteStatusLine(conn, response.StatusOK)
-	if err != nil {
-		fmt.Println("Error writing status line:", err.Error())
-		return
-	}
-
-	resBytes := buffer.Bytes()
-
-	defaultHeaders := response.GetDefaultHeaders(len(resBytes))
-
-	err = response.WriteHeaders(conn, defaultHeaders)
-	if err != nil {
-		fmt.Println("Error writing headers:", err.Error())
-		return
-	}
-
-	_, err = conn.Write(resBytes)
-	if err != nil {
-		fmt.Println("Error writing body:", err.Error())
-		return
-	}
-
-	fmt.Printf("Sent %d bytes as response\n", len(resBytes))
+	fmt.Printf("Sent %d bytes as response\n", w.BytesWritten)
 
 	fmt.Println("Connection to ", conn.RemoteAddr(), "closed")
 }
