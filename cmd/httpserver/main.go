@@ -35,6 +35,25 @@ func main() {
 }
 
 func handler(w *response.Writer, req *request.Request) {
+	if strings.HasPrefix(req.RequestLine.RequestTarget, "/video") {
+
+		videoBytes, err := os.ReadFile("assets/vim.mp4")
+		if err != nil {
+			log.Fatal(err)
+		}
+		w.WriteStatusLine(response.StatusOK)
+
+		h := response.GetDefaultHeaders(len(videoBytes))
+		h.Override("Content-Type", "video/mp4")
+		w.WriteHeaders(h)
+
+		_, err = w.WriteBody(videoBytes)
+		if err != nil {
+			fmt.Printf("Error sending video: %v\n", err)
+		}
+		return
+	}
+
 	if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin") {
 		route := strings.TrimPrefix(req.RequestLine.RequestTarget, "/httpbin")
 		url := "https://httpbin.org" + route
