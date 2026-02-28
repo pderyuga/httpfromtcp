@@ -64,6 +64,16 @@ func (h Headers) Get(key string) (string, bool) {
 	return value, ok
 }
 
+func (h Headers) Override(key, value string) {
+	key = strings.ToLower(key)
+	h[key] = value
+}
+
+func (h Headers) Remove(key string) {
+	key = strings.ToLower(key)
+	delete(h, key)
+}
+
 func isTchar(r rune) bool {
 	if unicode.IsLetter(r) || unicode.IsNumber(r) {
 		return true

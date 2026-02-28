@@ -1,9 +1,13 @@
 package main
 
 import (
+	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/pderyuga/httpfromtcp/internal/request"
@@ -28,6 +32,50 @@ func main() {
 }
 
 func handler(w *response.Writer, req *request.Request) {
+	if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin") {
+		route := strings.TrimPrefix(req.RequestLine.RequestTarget, "/httpbin")
+		url := "https://httpbin.org" + route
+
+		resp, err := http.Get(url)
+		if err != nil {
+			log.Fatalf("Error making GET request: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			log.Fatalf("Unexpected status code: %d", resp.StatusCode)
+		}
+
+		w.WriteStatusLine(response.StatusOK)
+
+		headers := response.GetDefaultHeaders(0)
+		headers.Remove("Content-Length")
+		headers.Override("Content-Type", "text/json")
+		headers.Set("Transfer-Encoding", "chunked")
+		w.WriteHeaders(headers)
+
+		buf := make([]byte, 1024)
+		for {
+			n, err := resp.Body.Read(buf)
+			if n > 0 {
+				fmt.Printf("Received %d bytes:\n%s\n", n, string(buf[:n]))
+				w.WriteChunkedBody(buf[:n])
+			}
+
+			if err == io.EOF {
+				break
+			}
+
+			if err != nil {
+				fmt.Println("Error reading response body:", err)
+				break
+			}
+		}
+		w.WriteChunkedBodyDone()
+		fmt.Println("Stream processed successfully")
+		return
+	}
+
 	if req.RequestLine.RequestTarget == "/yourproblem" {
 		w.WriteStatusLine(response.StatusBadrequest)
 		body := []byte(`<html>

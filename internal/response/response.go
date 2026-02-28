@@ -79,6 +79,38 @@ func (w *Writer) WriteBody(p []byte) (int, error) {
 	return bytesWritten, nil
 }
 
+func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
+	if w.WriterState != WritingBody {
+		return 0, fmt.Errorf("cannot write body in state %d", w.WriterState)
+	}
+
+	hexadecimalChunkSize := []byte(fmt.Sprintf("%x\r\n", len(p)))
+
+	p = append(p, []byte("\r\n")...)
+	p = append(hexadecimalChunkSize, p...)
+	bytesWritten, err := w.Writer.Write(p)
+	if err != nil {
+		return 0, err
+	}
+	w.BytesWritten += bytesWritten
+	return bytesWritten, nil
+}
+
+func (w *Writer) WriteChunkedBodyDone() (int, error) {
+	if w.WriterState != WritingBody {
+		return 0, fmt.Errorf("cannot write body in state %d", w.WriterState)
+	}
+
+	p := []byte("0\r\n\r\n")
+	bytesWritten, err := w.Writer.Write(p)
+	if err != nil {
+		return 0, err
+	}
+	w.BytesWritten += bytesWritten
+	return bytesWritten, nil
+
+}
+
 func GetStatusLine(statusCode StatusCode) []byte {
 	reasonPhrase := ""
 
