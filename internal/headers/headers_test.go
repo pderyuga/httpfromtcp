@@ -7,10 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func NewHeaders() Headers {
-	return map[string]string{}
-}
-
 func TestParse(t *testing.T) {
 	// Test: Valid single header
 	headers := NewHeaders()

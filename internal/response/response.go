@@ -23,6 +23,7 @@ const (
 	WritingStatusLine WriterState = iota
 	WritingHeaders
 	WritingBody
+	WritingTrailers
 )
 
 type Writer struct {
@@ -75,7 +76,7 @@ func (w *Writer) WriteBody(p []byte) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	w.BytesWritten = bytesWritten
+	w.BytesWritten += bytesWritten
 	return bytesWritten, nil
 }
 
@@ -101,14 +102,35 @@ func (w *Writer) WriteChunkedBodyDone() (int, error) {
 		return 0, fmt.Errorf("cannot write body in state %d", w.WriterState)
 	}
 
-	p := []byte("0\r\n\r\n")
+	p := []byte("0\r\n")
 	bytesWritten, err := w.Writer.Write(p)
 	if err != nil {
 		return 0, err
 	}
 	w.BytesWritten += bytesWritten
+	w.WriterState = WritingTrailers
 	return bytesWritten, nil
 
+}
+
+func (w *Writer) WriteTrailers(h headers.Headers) error {
+	if w.WriterState != WritingTrailers {
+		return fmt.Errorf("cannot write trailers in state %d", w.WriterState)
+	}
+
+	var buf bytes.Buffer
+
+	for name, header := range h {
+		headerString := fmt.Sprintf("%s: %s\r\n", name, header)
+		buf.WriteString(headerString)
+	}
+	buf.WriteString("\r\n")
+	_, err := w.Writer.Write(buf.Bytes())
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func GetStatusLine(statusCode StatusCode) []byte {

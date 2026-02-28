@@ -1,15 +1,18 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 
+	"github.com/pderyuga/httpfromtcp/internal/headers"
 	"github.com/pderyuga/httpfromtcp/internal/request"
 	"github.com/pderyuga/httpfromtcp/internal/response"
 	"github.com/pderyuga/httpfromtcp/internal/server"
@@ -35,6 +38,7 @@ func handler(w *response.Writer, req *request.Request) {
 	if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin") {
 		route := strings.TrimPrefix(req.RequestLine.RequestTarget, "/httpbin")
 		url := "https://httpbin.org" + route
+		fmt.Println("Proxying to", url)
 
 		resp, err := http.Get(url)
 		if err != nil {
@@ -48,11 +52,14 @@ func handler(w *response.Writer, req *request.Request) {
 
 		w.WriteStatusLine(response.StatusOK)
 
-		headers := response.GetDefaultHeaders(0)
-		headers.Remove("Content-Length")
-		headers.Override("Content-Type", "text/json")
-		headers.Set("Transfer-Encoding", "chunked")
-		w.WriteHeaders(headers)
+		h := response.GetDefaultHeaders(0)
+		h.Remove("Content-Length")
+		h.Override("Content-Type", "text/plain")
+		h.Set("Transfer-Encoding", "chunked")
+		h.Set("Tralier", "X-Content-SHA256, X-Content-Length")
+		w.WriteHeaders(h)
+
+		fullBody := make([]byte, 0)
 
 		buf := make([]byte, 1024)
 		for {
@@ -60,6 +67,7 @@ func handler(w *response.Writer, req *request.Request) {
 			if n > 0 {
 				fmt.Printf("Received %d bytes:\n%s\n", n, string(buf[:n]))
 				w.WriteChunkedBody(buf[:n])
+				fullBody = append(fullBody, buf[:n]...)
 			}
 
 			if err == io.EOF {
@@ -73,6 +81,15 @@ func handler(w *response.Writer, req *request.Request) {
 		}
 		w.WriteChunkedBodyDone()
 		fmt.Println("Stream processed successfully")
+
+		hashedBody := sha256.Sum256(fullBody)
+		hashedBodyString := fmt.Sprintf("%x", hashedBody)
+
+		trailers := headers.NewHeaders()
+		trailers.Set("X-Content-SHA256", hashedBodyString)
+		trailers.Set("X-Content-Length", strconv.Itoa(len(fullBody)))
+		w.WriteTrailers(trailers)
+
 		return
 	}
 
